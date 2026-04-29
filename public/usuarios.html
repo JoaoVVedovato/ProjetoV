@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Usuários</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <h2>Cadastrar Usuário</h2>
+
+  <input id="nome" placeholder="Nome">
+  <input id="documento" placeholder="CPF ou CNPJ">
+  <input id="email" placeholder="Email">
+  <input id="senha" placeholder="Senha" type="password">
+
+  <select id="tipo">
+    <option value="vendedor">Vendedor</option>
+    <option value="supervisor">Supervisor</option>
+    <option value="desenhista">Desenhista</option>
+  </select>
+
+  <button onclick="salvarUsuario()">Salvar</button>
+
+  <p id="msg" style="color:green"></p>
+  <p id="erro" style="color:red"></p>
+
+  <hr>
+
+  <h2>Usuários Cadastrados</h2>
+
+  <table border="1" cellpadding="8">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Nome</th>
+        <th>Email</th>
+        <th>Documento</th>
+        <th>Telefone</th>
+      </tr>
+    </thead>
+    <tbody id="tabelaUsuarios"></tbody>
+  </table>
+
+  <script>
+
+    async function carregarUsuarios() {
+      const res = await fetch('/api/usuarios');
+      const usuarios = await res.json();
+
+      const tbody = document.getElementById('tabelaUsuarios');
+      tbody.innerHTML = '';
+
+      usuarios.forEach(u => {
+        tbody.innerHTML += `
+          <tr>
+            <td>${u.pessoa_id}</td>
+            <td>${u.nome}</td>
+            <td>${u.email || ''}</td>
+            <td>${u.documento || ''}</td>
+            <td>${u.telefone || ''}</td>
+          </tr>`;
+      });
+    }
+
+    async function salvarUsuario() {
+      const dados = {
+        nome: document.getElementById('nome').value,
+        documento: document.getElementById('documento').value,
+        email: document.getElementById('email').value,
+        senha: document.getElementById('senha').value,
+        tipo: document.getElementById('tipo').value
+      };
+
+      const res = await fetch('/api/usuarios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dados)
+      });
+
+      const resultado = await res.json();
+
+      if (resultado.sucesso) {
+        document.getElementById('msg').innerText = resultado.mensagem;
+        document.getElementById('erro').innerText = '';
+        ['nome','documento','email','senha'].forEach(id => {
+          document.getElementById(id).value = '';
+        });
+        carregarUsuarios();
+      } else {
+        document.getElementById('erro').innerText = resultado.erro;
+        document.getElementById('msg').innerText = '';
+      }
+    }
+
+    carregarUsuarios();
+
+  </script>
+
+</body>
+</html>

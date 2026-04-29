@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Orçamentos</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <h2>Finalizar Orçamento</h2>
+
+  <select id="solicitacao_id">
+    <option value="">Selecione a Solicitação...</option>
+  </select>
+
+  <input id="numero_pedido" placeholder="Código do Orçamento">
+  <input id="valor_total" placeholder="Valor Total (ex: 1500.00)" type="number" step="0.01">
+
+  <button onclick="finalizarOrcamento()">Finalizar</button>
+
+  <p id="msg" style="color:green"></p>
+  <p id="erro" style="color:red"></p>
+
+  <hr>
+
+  <h2>Orçamentos Finalizados</h2>
+
+  <table border="1" cellpadding="8">
+    <thead>
+      <tr>
+        <th>Nº Pedido</th>
+        <th>Solicitação</th>
+        <th>Valor Total</th>
+        <th>Data</th>
+      </tr>
+    </thead>
+    <tbody id="tabelaOrcamentos"></tbody>
+  </table>
+
+  <script>
+
+    async function carregarSolicitacoes() {
+      const res = await fetch('/api/solicitacoes');
+      const lista = await res.json();
+      const select = document.getElementById('solicitacao_id');
+      // Mostra só as que não estão finalizadas
+      lista.filter(s => s.status !== 'finalizado').forEach(s => {
+        select.innerHTML += `<option value="${s.solicitacao_id}">#${s.solicitacao_id} — ${s.cliente} (${s.tipo})</option>`;
+      });
+    }
+
+    async function carregarOrcamentos() {
+      const res = await fetch('/api/orcamentos');
+      const lista = await res.json();
+
+      const tbody = document.getElementById('tabelaOrcamentos');
+      tbody.innerHTML = '';
+
+      lista.forEach(o => {
+        const data = o.data_finalizacao
+          ? new Date(o.data_finalizacao).toLocaleDateString('pt-BR')
+          : '';
+        tbody.innerHTML += `
+          <tr>
+            <td>${o.numero_pedido || ''}</td>
+            <td>${o.solicitacao}</td>
+            <td>R$ ${parseFloat(o.valor_total).toFixed(2)}</td>
+            <td>${data}</td>
+          </tr>`;
+      });
+    }
+
+    async function finalizarOrcamento() {
+      const solicitacao_id = document.getElementById('solicitacao_id').value;
+      const numero_pedido = document.getElementById('numero_pedido').value;
+      const valor_total = document.getElementById('valor_total').value;
+
+      if (!solicitacao_id) {
+        document.getElementById('erro').innerText = 'Selecione uma solicitação.';
+        return;
+      }
+      if (!valor_total) {
+        document.getElementById('erro').innerText = 'Informe o valor total.';
+        return;
+      }
+
+      const res = await fetch('/api/orcamentos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ solicitacao_id, numero_pedido, valor_total })
+      });
+
+      const resultado = await res.json();
+
+      if (resultado.sucesso) {
+        document.getElementById('msg').innerText = resultado.mensagem;
+        document.getElementById('erro').innerText = '';
+        document.getElementById('numero_pedido').value = '';
+        document.getElementById('valor_total').value = '';
+        carregarOrcamentos();
+      } else {
+        document.getElementById('erro').innerText = resultado.erro;
+        document.getElementById('msg').innerText = '';
+      }
+    }
+
+    carregarSolicitacoes();
+    carregarOrcamentos();
+
+  </script>
+
+</body>
+</html>

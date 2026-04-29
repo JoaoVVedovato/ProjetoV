@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Clientes</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <h2>Novo Cliente</h2>
+
+  <input id="nome" placeholder="Nome">
+  <input id="documento" placeholder="CPF ou CNPJ">
+  <input id="email" placeholder="Email">
+  <input id="telefone" placeholder="Telefone">
+  <input id="cidade" placeholder="Cidade">
+  <input id="estado" placeholder="Estado">
+
+  <button onclick="salvarCliente()">Salvar Cliente</button>
+  <button onclick="VoltarInicio()">Voltar ao Início</button>
+
+  <p id="msg" style="color:green"></p>
+  <p id="erro" style="color:red"></p>
+
+  <hr>
+
+  <h2>Clientes Cadastrados</h2>
+
+  <table border="1" cellpadding="8">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Nome</th>
+        <th>Email</th>
+        <th>Documento</th>
+        <th>Telefone</th>
+        <th>Cidade</th>
+        <th>Estado</th>
+      </tr>
+    </thead>
+    <tbody id="tabelaClientes"></tbody>
+  </table>
+
+  <script>
+
+    // Carrega a lista de clientes ao abrir a página
+    async function carregarClientes() {
+      const res = await fetch('/api/clientes');
+      const clientes = await res.json();
+
+      const tbody = document.getElementById('tabelaClientes');
+      tbody.innerHTML = '';
+
+      clientes.forEach(c => {
+        tbody.innerHTML += `
+          <tr>
+            <td>${c.pessoa_id}</td>
+            <td>${c.nome}</td>
+            <td>${c.email || ''}</td>
+            <td>${c.documento || ''}</td>
+            <td>${c.telefone || ''}</td>
+            <td>${c.cidade || ''}</td>
+            <td>${c.estado || ''}</td>
+          </tr>`;
+      });
+    }
+
+    // Salva novo cliente
+    async function salvarCliente() {
+      const dados = {
+        nome: document.getElementById('nome').value,
+        documento: document.getElementById('documento').value,
+        email: document.getElementById('email').value,
+        telefone: document.getElementById('telefone').value,
+        cidade: document.getElementById('cidade').value,
+        estado: document.getElementById('estado').value
+      };
+
+      const res = await fetch('/api/clientes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dados)
+      });
+
+      const resultado = await res.json();
+
+      if (resultado.sucesso) {
+        document.getElementById('msg').innerText = resultado.mensagem;
+        document.getElementById('erro').innerText = '';
+        // Limpa os campos
+        ['nome','documento','email','telefone','cidade','estado'].forEach(id => {
+          document.getElementById(id).value = '';
+        });
+        carregarClientes(); // atualiza a tabela
+      } else {
+        document.getElementById('erro').innerText = resultado.erro;
+        document.getElementById('msg').innerText = '';
+      }
+    }
+
+    function VoltarInicio() {
+      window.location.href = '/';
+    }
+
+    carregarClientes();
+
+  </script>
+
+</body>
+</html>

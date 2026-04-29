@@ -1,0 +1,6 @@
+
+> projeto-integrador-v@1.0.0 start
+> node server.js
+
+◇ injected env (5) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+Servidor rodando em http://localhost:3000

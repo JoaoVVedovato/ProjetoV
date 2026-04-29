@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Histórico</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <h2>Histórico da Solicitação</h2>
+
+  <select id="solicitacao_id">
+    <option value="">Selecione a Solicitação...</option>
+  </select>
+
+  <button onclick="buscarHistorico()">Buscar</button>
+
+  <p id="erro" style="color:red"></p>
+
+  <table border="1" cellpadding="8" id="tabela" style="display:none">
+    <thead>
+      <tr>
+        <th>Usuário</th>
+        <th>Status</th>
+        <th>Observação</th>
+        <th>Data</th>
+      </tr>
+    </thead>
+    <tbody id="tabelaHistorico"></tbody>
+  </table>
+
+  <script>
+
+    async function carregarSolicitacoes() {
+      const res = await fetch('/api/solicitacoes');
+      const lista = await res.json();
+      const select = document.getElementById('solicitacao_id');
+      lista.forEach(s => {
+        select.innerHTML += `<option value="${s.solicitacao_id}">#${s.solicitacao_id} — ${s.cliente} (${s.tipo})</option>`;
+      });
+    }
+
+    async function buscarHistorico() {
+      const id = document.getElementById('solicitacao_id').value;
+
+      if (!id) {
+        document.getElementById('erro').innerText = 'Selecione uma solicitação.';
+        return;
+      }
+
+      const res = await fetch(`/api/historico/${id}`);
+      const historico = await res.json();
+
+      const tbody = document.getElementById('tabelaHistorico');
+      tbody.innerHTML = '';
+
+      if (historico.length === 0) {
+        document.getElementById('erro').innerText = 'Nenhum histórico encontrado.';
+        document.getElementById('tabela').style.display = 'none';
+        return;
+      }
+
+      document.getElementById('erro').innerText = '';
+      document.getElementById('tabela').style.display = 'table';
+
+      historico.forEach(h => {
+        const data = new Date(h.data_criacao).toLocaleString('pt-BR');
+        tbody.innerHTML += `
+          <tr>
+            <td>${h.usuario || 'Sistema'}</td>
+            <td>${h.status}</td>
+            <td>${h.observacao || ''}</td>
+            <td>${data}</td>
+          </tr>`;
+      });
+    }
+
+    carregarSolicitacoes();
+
+  </script>
+
+</body>
+</html>

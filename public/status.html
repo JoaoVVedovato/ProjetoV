@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Status</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <h2>Alterar Status</h2>
+
+  <select id="solicitacao_id">
+    <option value="">Selecione a Solicitação...</option>
+  </select>
+
+  <select id="status">
+    <option value="aberto">Aberto</option>
+    <option value="em andamento">Em Andamento</option>
+    <option value="finalizado">Finalizado</option>
+    <option value="cancelado">Cancelado</option>
+  </select>
+
+  <textarea id="observacao" placeholder="Observação obrigatória"></textarea>
+
+  <button onclick="atualizarStatus()">Atualizar Status</button>
+
+  <p id="msg" style="color:green"></p>
+  <p id="erro" style="color:red"></p>
+
+  <script>
+
+    // Carrega solicitações no select
+    async function carregarSolicitacoes() {
+      const res = await fetch('/api/solicitacoes');
+      const lista = await res.json();
+      const select = document.getElementById('solicitacao_id');
+      lista.forEach(s => {
+        select.innerHTML += `<option value="${s.solicitacao_id}">#${s.solicitacao_id} — ${s.cliente} (${s.tipo})</option>`;
+      });
+    }
+
+    async function atualizarStatus() {
+      const solicitacao_id = document.getElementById('solicitacao_id').value;
+      const status_nome = document.getElementById('status').value;
+      const observacao = document.getElementById('observacao').value;
+
+      if (!solicitacao_id) {
+        document.getElementById('erro').innerText = 'Selecione uma solicitação.';
+        return;
+      }
+      if (!observacao.trim()) {
+        document.getElementById('erro').innerText = 'Observação é obrigatória.';
+        return;
+      }
+
+      const res = await fetch('/api/status', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ solicitacao_id, status_nome, observacao })
+      });
+
+      const resultado = await res.json();
+
+      if (resultado.sucesso) {
+        document.getElementById('msg').innerText = resultado.mensagem;
+        document.getElementById('erro').innerText = '';
+        document.getElementById('observacao').value = '';
+      } else {
+        document.getElementById('erro').innerText = resultado.erro;
+        document.getElementById('msg').innerText = '';
+      }
+    }
+
+    carregarSolicitacoes();
+
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>PLO</title>
+
+    <style>
+
+        body {
+            font-family: Arial;
+            margin: 0;
+        }
+
+        #login, #cadastro {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: #34495e;
+        }
+
+        .box {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            width: 300px;
+            text-align: center;
+        }
+
+        input {
+            display: block;
+            width: 90%;
+            margin: 10px auto;
+            padding: 8px;
+        }
+
+        button {
+            padding: 10px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        #sistema {
+            display: none;
+            height: 100vh;
+        }
+
+        .menu {
+            width: 220px;
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            float: left;
+            height: 100%;
+        }
+
+            .menu button {
+                width: 100%;
+                margin: 5px 0;
+                background: #34495e;
+                color: white;
+                border: none;
+                padding: 10px;
+            }
+
+                .menu button:hover {
+                    background: #1abc9c;
+                }
+
+        #conteudo {
+            margin-left: 240px;
+            padding: 40px;
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+    <!-- LOGIN -->
+
+    <div id="login">
+
+        <div class="box">
+
+            <h2>Login</h2>
+
+            <input id="emailLogin" placeholder="Email">
+            <input id="senhaLogin" type="password" placeholder="Senha">
+
+            <button onclick="login()">Entrar</button>
+            <button onclick="abrirCadastro()">Criar Conta</button>
+
+            <p id="erro" style="color:red"></p>
+
+        </div>
+
+    </div>
+
+
+    <!-- CADASTRO -->
+
+    <div id="cadastro" style="display:none">
+
+        <div class="box">
+
+            <h2>Criar Conta</h2>
+
+            <input id="nomeCadastro" placeholder="Nome">
+            <input id="emailCadastro" placeholder="Email">
+            <input id="senhaCadastro" type="password" placeholder="Senha">
+
+            <button onclick="criarConta()">Cadastrar</button>
+            <button onclick="voltarLogin()">Voltar</button>
+
+            <p id="msgCadastro" style="color:green"></p>
+            <p id="erroCadastro" style="color:red"></p>
+
+        </div>
+
+    </div>
+
+
+    <!-- SISTEMA -->
+
+    <div id="sistema">
+
+        <div class="menu">
+
+            <h3>PLO</h3>
+
+            <a href="/usuarios"><button>Gestores</button></a>
+            <a href="/clientes"><button>Clientes</button></a>
+            <a href="/documentacao"><button>Solicitações</button></a>
+            <a href="/status"><button>Alterar Status</button></a>
+            <a href="/orcamento"><button>Orçamentos</button></a>
+            <a href="/historico"><button>Histórico</button></a>
+
+            <button onclick="sair()">Sair</button>
+
+        </div>
+
+        <div id="conteudo">
+            <h2 id="boasVindas">Bem-vindo ao sistema</h2>
+        </div>
+
+    </div>
+
+
+    <script>
+
+        /* RESTAURAR USUÁRIO AUTENTICADO */
+
+        window.addEventListener('DOMContentLoaded', function() {
+            const usuarioSalvo = sessionStorage.getItem('usuarioAutenticado');
+            if (usuarioSalvo) {
+                const usuario = JSON.parse(usuarioSalvo);
+                document.getElementById('login').style.display = 'none';
+                document.getElementById('sistema').style.display = 'block';
+                document.getElementById('boasVindas').innerText =
+                    'Bem-vindo, ' + usuario.nome + '!';
+            }
+        });
+
+        /* LOGIN — agora conectado ao banco via API */
+
+        async function login() {
+            const email = document.getElementById('emailLogin').value;
+            const senha = document.getElementById('senhaLogin').value;
+
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, senha })
+            });
+
+            const resultado = await res.json();
+
+            if (resultado.sucesso) {
+                // Salva o usuário no sessionStorage
+                sessionStorage.setItem('usuarioAutenticado', JSON.stringify(resultado.usuario));
+
+                document.getElementById('login').style.display = 'none';
+                document.getElementById('sistema').style.display = 'block';
+                document.getElementById('boasVindas').innerText =
+                    'Bem-vindo, ' + resultado.usuario.nome + '!';
+            } else {
+                document.getElementById('erro').innerText =
+                    resultado.mensagem || 'Email ou senha inválidos';
+            }
+        }
+
+        /* CRIAR CONTA — salva no banco */
+
+        async function criarConta() {
+            const nome  = document.getElementById('nomeCadastro').value;
+            const email = document.getElementById('emailCadastro').value;
+            const senha = document.getElementById('senhaCadastro').value;
+
+            const res = await fetch('/api/usuarios', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nome, email, senha, tipo: 'vendedor' })
+            });
+
+            const resultado = await res.json();
+
+            if (resultado.sucesso) {
+                document.getElementById('msgCadastro').innerText = 'Conta criada! Faça o login.';
+                document.getElementById('erroCadastro').innerText = '';
+            } else {
+                document.getElementById('erroCadastro').innerText =
+                    resultado.erro || 'Erro ao criar conta';
+                document.getElementById('msgCadastro').innerText = '';
+            }
+        }
+
+        /* LOGOUT */
+
+        function sair() {
+            // Remove o usuário do sessionStorage
+            sessionStorage.removeItem('usuarioAutenticado');
+
+            document.getElementById('sistema').style.display = 'none';
+            document.getElementById('login').style.display = 'flex';
+            document.getElementById('emailLogin').value = '';
+            document.getElementById('senhaLogin').value = '';
+            document.getElementById('erro').innerText = '';
+        }
+
+        /* NAVEGAÇÃO */
+
+        function abrirCadastro() {
+            document.getElementById('login').style.display = 'none';
+            document.getElementById('cadastro').style.display = 'flex';
+        }
+
+        function voltarLogin() {
+            document.getElementById('cadastro').style.display = 'none';
+            document.getElementById('login').style.display = 'flex';
+        }
+
+    </script>
+
+</body>
+</html>
