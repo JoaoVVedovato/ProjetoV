@@ -1,84 +1,115 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="pt-BR">
 <head>
-  <title>Histórico</title>
+  <meta charset="UTF-8">
+  <title>PLO — Histórico</title>
   <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar" id="topbar"></div>
+    <div class="page-content">
 
-  <h2>Histórico da Solicitação</h2>
+      <div class="form-section">
+        <div class="form-title">Histórico Detalhado</div>
+        <div class="form-grid">
+          <div class="form-group full">
+            <label>Selecionar Solicitação</label>
+            <select id="solicitacao_id" onchange="buscarHistorico()">
+              <option value="">Selecione uma solicitação para ver o histórico...</option>
+            </select>
+          </div>
+        </div>
+      </div>
 
-  <select id="solicitacao_id">
-    <option value="">Selecione a Solicitação...</option>
-  </select>
+      <div id="detalheCard" style="display:none" class="table-card" style="margin-bottom:16px">
+        <div class="table-card-header">
+          <span class="table-card-title" id="detalheTitle">Detalhes da Solicitação</span>
+        </div>
+        <div id="detalheInfo" style="padding:16px 20px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px;border-bottom:1px solid var(--border)"></div>
+        <table class="data-table">
+          <thead><tr>
+            <th>Data/Hora</th><th>Alterado por</th><th>Status</th><th>Observação</th>
+          </tr></thead>
+          <tbody id="tbody"><tr><td colspan="4" class="empty-state">Nenhum histórico</td></tr></tbody>
+        </table>
+      </div>
 
-  <button onclick="buscarHistorico()">Buscar</button>
+    </div>
+  </div>
+</div>
+<script src="auth.js"></script>
+<script>
+const u = requirePapel(['supervisor']);
+if (u) {
+  buildSidebar('/historico');
+  buildTopbar('Histórico');
+  carregarSolicitacoes();
+}
 
-  <p id="erro" style="color:red"></p>
+let todasSolicits = [];
 
-  <table border="1" cellpadding="8" id="tabela" style="display:none">
-    <thead>
-      <tr>
-        <th>Usuário</th>
-        <th>Status</th>
-        <th>Observação</th>
-        <th>Data</th>
-      </tr>
-    </thead>
-    <tbody id="tabelaHistorico"></tbody>
-  </table>
+async function carregarSolicitacoes() {
+  const res = await fetch('/api/solicitacoes');
+  todasSolicits = await res.json();
+  const sel = document.getElementById('solicitacao_id');
+  todasSolicits.forEach(s => {
+    sel.innerHTML += `<option value="${s.solicitacao_id}">#${s.solicitacao_id} — ${s.cliente} | ${s.tipo} [${s.status}]</option>`;
+  });
+}
 
-  <script>
+async function buscarHistorico() {
+  const id = document.getElementById('solicitacao_id').value;
+  if (!id) { document.getElementById('detalheCard').style.display = 'none'; return; }
 
-    async function carregarSolicitacoes() {
-      const res = await fetch('/api/solicitacoes');
-      const lista = await res.json();
-      const select = document.getElementById('solicitacao_id');
-      lista.forEach(s => {
-        select.innerHTML += `<option value="${s.solicitacao_id}">#${s.solicitacao_id} — ${s.cliente} (${s.tipo})</option>`;
-      });
-    }
+  const sol = todasSolicits.find(s => s.solicitacao_id == id);
 
-    async function buscarHistorico() {
-      const id = document.getElementById('solicitacao_id').value;
+  const res = await fetch(`/api/historico/${id}`);
+  const historico = await res.json();
 
-      if (!id) {
-        document.getElementById('erro').innerText = 'Selecione uma solicitação.';
-        return;
-      }
+  document.getElementById('detalheCard').style.display = 'block';
+  document.getElementById('detalheTitle').textContent = `Solicitação #${id} — ${sol ? sol.cliente : ''}`;
 
-      const res = await fetch(`/api/historico/${id}`);
-      const historico = await res.json();
+  if (sol) {
+    document.getElementById('detalheInfo').innerHTML = `
+      <div>
+        <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Cliente</div>
+        <div style="font-weight:600">${sol.cliente}</div>
+      </div>
+      <div>
+        <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Vendedor</div>
+        <div>${sol.vendedor || '—'}</div>
+      </div>
+      <div>
+        <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Tipo</div>
+        <div>${sol.tipo}</div>
+      </div>
+      <div>
+        <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Status Atual</div>
+        <div>${badgeStatus(sol.status)}</div>
+      </div>
+      <div style="grid-column:1/-1">
+        <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Descrição</div>
+        <div style="color:var(--text-muted)">${sol.descricao}</div>
+      </div>
+    `;
+  }
 
-      const tbody = document.getElementById('tabelaHistorico');
-      tbody.innerHTML = '';
-
-      if (historico.length === 0) {
-        document.getElementById('erro').innerText = 'Nenhum histórico encontrado.';
-        document.getElementById('tabela').style.display = 'none';
-        return;
-      }
-
-      document.getElementById('erro').innerText = '';
-      document.getElementById('tabela').style.display = 'table';
-
-      historico.forEach(h => {
-        const data = new Date(h.data_criacao).toLocaleString('pt-BR');
-        tbody.innerHTML += `
-          <tr>
-            <td>${h.usuario || 'Sistema'}</td>
-            <td>${h.status}</td>
-            <td>${h.observacao || ''}</td>
-            <td>${data}</td>
-          </tr>`;
-      });
-    }
-
-    carregarSolicitacoes();
-
-  </script>
-
+  const tbody = document.getElementById('tbody');
+  if (!historico.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Nenhuma alteração registrada</td></tr>';
+    return;
+  }
+  tbody.innerHTML = historico.map((h, i) => `
+    <tr>
+      <td class="text-muted">${formatDateTime(h.data_criacao)}</td>
+      <td>${h.usuario || '<span class="text-muted">Sistema</span>'}</td>
+      <td>${badgeStatus(h.status)}</td>
+      <td>${h.observacao || '<span class="text-muted">—</span>'}</td>
+    </tr>`).join('');
+}
+</script>
 </body>
 </html>

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>PLO — Meu Perfil</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar" id="topbar"></div>
+    <div class="page-content">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+        <div class="form-section">
+          <div class="form-title">Dados Pessoais</div>
+          <div class="form-grid">
+            <div class="form-group full">
+              <label>Nome</label>
+              <input id="nome" placeholder="Nome completo">
+            </div>
+            <div class="form-group full">
+              <label>Email</label>
+              <input id="email" type="email" disabled style="opacity:.5;cursor:not-allowed">
+            </div>
+            <div class="form-group">
+              <label>Telefone</label>
+              <input id="telefone" placeholder="(00) 00000-0000">
+            </div>
+            <div class="form-group">
+              <label>Cidade</label>
+              <input id="cidade" placeholder="Cidade">
+            </div>
+            <div class="form-group">
+              <label>Estado</label>
+              <input id="estado" placeholder="UF" maxlength="2">
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-primary" onclick="salvarDados()">Salvar Dados</button>
+            <p id="msg-dados" class="msg-hidden"></p>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <div class="form-title">Alterar Senha</div>
+          <div class="form-grid">
+            <div class="form-group full">
+              <label>Senha Atual</label>
+              <input id="senha_atual" type="password" placeholder="••••••••">
+            </div>
+            <div class="form-group full">
+              <label>Nova Senha</label>
+              <input id="senha_nova" type="password" placeholder="••••••••" oninput="verificarForca()">
+              <div id="forca-bar" style="margin-top:6px;height:4px;border-radius:4px;background:var(--border);overflow:hidden">
+                <div id="forca-fill" style="height:100%;width:0;transition:width .3s,background .3s"></div>
+              </div>
+              <span id="forca-label" style="font-size:11px;color:var(--text-muted)"></span>
+            </div>
+            <div class="form-group full">
+              <label>Confirmar Nova Senha</label>
+              <input id="senha_confirma" type="password" placeholder="••••••••">
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-primary" onclick="alterarSenha()">Alterar Senha</button>
+            <p id="msg-senha" class="msg-hidden"></p>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="table-card" style="margin-top:20px">
+        <div class="table-card-header">
+          <span class="table-card-title">Informações da Conta</span>
+        </div>
+        <div id="resumo" style="padding:20px;display:grid;grid-template-columns:repeat(4,1fr);gap:16px"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<script src="auth.js"></script>
+<script>
+const u = requireAuth();
+if (u) {
+  buildSidebar('/perfil');
+  buildTopbar('Meu Perfil');
+  carregarPerfil();
+}
+
+async function carregarPerfil() {
+  const res = await fetch(`/api/perfil/${u.pessoa_id}`);
+  const dados = await res.json();
+
+  document.getElementById('nome').value     = dados.nome || '';
+  document.getElementById('email').value    = dados.email || '';
+  document.getElementById('telefone').value = dados.telefone || '';
+  document.getElementById('cidade').value   = dados.cidade || '';
+  document.getElementById('estado').value   = dados.estado || '';
+
+  document.getElementById('resumo').innerHTML = `
+    <div>
+      <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Nome</div>
+      <div style="font-weight:600">${dados.nome}</div>
+    </div>
+    <div>
+      <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Email</div>
+      <div>${dados.email || '—'}</div>
+    </div>
+    <div>
+      <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Cargo</div>
+      <div><span class="badge badge-em-andamento">${papelLabel(u.papel)}</span></div>
+    </div>
+    <div>
+      <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Documento</div>
+      <div>${dados.documento || '—'}</div>
+    </div>
+  `;
+}
+
+async function salvarDados() {
+  const nome     = document.getElementById('nome').value;
+  const telefone = document.getElementById('telefone').value;
+  const cidade   = document.getElementById('cidade').value;
+  const estado   = document.getElementById('estado').value;
+
+  const ok = validar([
+    ['msg-dados', validarNome(nome)],
+    ['msg-dados', validarTelefone(telefone)],
+  ]);
+  if (!ok) return;
+
+  const res = await fetch(`/api/perfil/${u.pessoa_id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nome, telefone, cidade, estado })
+  });
+  const r = await res.json();
+  if (r.sucesso) {
+    const atualizado = { ...u, nome: r.usuario.nome };
+    sessionStorage.setItem('usuario', JSON.stringify(atualizado));
+    showMsg('msg-dados', r.mensagem, 'ok');
+    carregarPerfil();
+  } else {
+    showMsg('msg-dados', r.erro || 'Erro ao salvar.', 'erro');
+  }
+}
+
+async function alterarSenha() {
+  const senha_atual    = document.getElementById('senha_atual').value;
+  const senha_nova     = document.getElementById('senha_nova').value;
+  const senha_confirma = document.getElementById('senha_confirma').value;
+
+  const ok = validar([
+    ['msg-senha', !senha_atual ? 'Informe a senha atual.' : null],
+    ['msg-senha', validarSenha(senha_nova)],
+    ['msg-senha', senha_nova !== senha_confirma ? 'As senhas não coincidem.' : null],
+  ]);
+  if (!ok) return;
+
+  const res = await fetch(`/api/perfil/${u.pessoa_id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      nome: document.getElementById('nome').value,
+      telefone: document.getElementById('telefone').value,
+      cidade: document.getElementById('cidade').value,
+      estado: document.getElementById('estado').value,
+      senha_atual,
+      senha_nova
+    })
+  });
+  const r = await res.json();
+  if (r.sucesso) {
+    showMsg('msg-senha', 'Senha alterada com sucesso!', 'ok');
+    document.getElementById('senha_atual').value    = '';
+    document.getElementById('senha_nova').value     = '';
+    document.getElementById('senha_confirma').value = '';
+    document.getElementById('forca-fill').style.width = '0';
+    document.getElementById('forca-label').textContent = '';
+  } else {
+    showMsg('msg-senha', r.erro || 'Erro ao alterar senha.', 'erro');
+  }
+}
+
+function verificarForca() {
+  const senha = document.getElementById('senha_nova').value;
+  const fill  = document.getElementById('forca-fill');
+  const label = document.getElementById('forca-label');
+  let pontos = 0;
+  if (senha.length >= 6)  pontos++;
+  if (senha.length >= 10) pontos++;
+  if (/[A-Z]/.test(senha)) pontos++;
+  if (/[0-9]/.test(senha)) pontos++;
+  if (/[^A-Za-z0-9]/.test(senha)) pontos++;
+
+  const niveis = [
+    { pct: '0%',   cor: 'transparent', txt: '' },
+    { pct: '25%',  cor: '#e74c3c',     txt: 'Fraca' },
+    { pct: '50%',  cor: '#f39c12',     txt: 'Média' },
+    { pct: '75%',  cor: '#5dade2',     txt: 'Boa' },
+    { pct: '100%', cor: '#27ae60',     txt: 'Forte' },
+  ];
+  const nivel = !senha ? niveis[0] : pontos <= 1 ? niveis[1] : pontos <= 2 ? niveis[2] : pontos <= 3 ? niveis[3] : niveis[4];
+  fill.style.width      = nivel.pct;
+  fill.style.background = nivel.cor;
+  label.textContent     = nivel.txt;
+  label.style.color     = nivel.cor;
+}
+</script>
+</body>
+</html>

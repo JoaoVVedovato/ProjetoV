@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>PLO — Solicitações</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .autocomplete-wrap { position:relative }
+    .autocomplete-wrap input { width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-size:13px;box-sizing:border-box }
+    .autocomplete-wrap input.border-erro { border-color:#e74c3c }
+    .autocomplete-list { position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:6px;max-height:220px;overflow-y:auto;z-index:50;display:none }
+    .autocomplete-list.open { display:block }
+    .autocomplete-item { padding:9px 12px;font-size:13px;cursor:pointer }
+    .autocomplete-item:hover,.autocomplete-item.selected { background:var(--bg) }
+    .modal-overlay { display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;align-items:center;justify-content:center }
+    .modal-overlay.open { display:flex }
+    .modal-box { background:var(--card);border:1px solid var(--border);border-radius:12px;width:100%;max-width:680px;max-height:90vh;overflow-y:auto;padding:28px;position:relative }
+    .modal-close { position:absolute;top:16px;right:20px;background:transparent;border:none;color:var(--text-muted);font-size:20px;cursor:pointer }
+    .modal-title { font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;margin-bottom:20px }
+    .timeline { display:flex;flex-direction:column;gap:0 }
+    .timeline-item { display:flex;gap:14px;padding-bottom:16px;position:relative }
+    .timeline-item:not(:last-child)::before { content:'';position:absolute;left:15px;top:32px;bottom:0;width:2px;background:var(--border) }
+    .timeline-dot { width:32px;height:32px;border-radius:50%;background:var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;margin-top:2px }
+    .timeline-content { flex:1 }
+    .timeline-header { display:flex;align-items:center;gap:8px;margin-bottom:4px }
+    .timeline-obs { font-size:13px;color:var(--text-muted);margin-top:4px }
+    .info-grid { display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:20px }
+    .info-item label { font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:4px }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar" id="topbar"></div>
+    <div class="page-content">
+
+      <div class="form-section" id="formSection" style="display:none">
+        <div class="form-title">Nova Solicitação</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Cliente</label>
+            <input type="hidden" id="cliente_id">
+            <div class="autocomplete-wrap">
+              <input type="text" id="cliente-busca" placeholder="Digite o nome do cliente..." autocomplete="off"
+                oninput="filtrarClientes(this.value)" onfocus="abrirLista()" onblur="fecharListaDelay()">
+              <div class="autocomplete-list" id="cliente-lista"></div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Tipo de Serviço</label>
+            <select id="tipo">
+              <option value="Corte">Corte</option>
+              <option value="Dobra">Dobra</option>
+              <option value="Laser">Laser</option>
+              <option value="Pintura">Pintura</option>
+              <option value="Outro">Outro</option>
+            </select>
+          </div>
+          <div class="form-group full">
+            <label>Descrição</label>
+            <textarea id="descricao" placeholder="Descreva detalhadamente o serviço solicitado..."></textarea>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" onclick="criarSolicitacao()">Criar Solicitação</button>
+          <p id="msg" class="msg-hidden"></p>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-card-header">
+          <span class="table-card-title">Solicitações</span>
+          <span id="contador" style="font-size:12px;color:var(--text-muted)"></span>
+        </div>
+        <div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;gap:10px;flex-wrap:wrap">
+          <input id="filtro-cliente" placeholder="Buscar por cliente ou CPF/CNPJ..." oninput="filtrar()"
+            style="flex:1;min-width:160px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 12px;color:var(--text);font-size:13px">
+          <select id="filtro-status" onchange="filtrar()"
+            style="width:160px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 12px;color:var(--text);font-size:13px">
+            <option value="">Todos os status</option>
+            <option value="aberto">Aberto</option>
+            <option value="em andamento">Em Andamento</option>
+            <option value="finalizado">Finalizado</option>
+            <option value="cancelado">Cancelado</option>
+          </select>
+          <select id="filtro-tipo" onchange="filtrar()"
+            style="width:140px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 12px;color:var(--text);font-size:13px">
+            <option value="">Todos os tipos</option>
+            <option value="Corte">Corte</option>
+            <option value="Dobra">Dobra</option>
+            <option value="Laser">Laser</option>
+            <option value="Pintura">Pintura</option>
+            <option value="Outro">Outro</option>
+          </select>
+          <input id="filtro-data" type="date" onchange="filtrar()"
+            style="width:150px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 12px;color:var(--text);font-size:13px">
+          <button onclick="limparFiltros()" style="background:transparent;border:1px solid var(--border);border-radius:6px;padding:7px 14px;color:var(--text-muted);font-size:12px;cursor:pointer">Limpar</button>
+        </div>
+        <table class="data-table">
+          <thead><tr>
+            <th>#</th><th>Cliente</th><th>Vendedor</th><th>Tipo</th><th>Descrição</th><th>Status</th><th>Data</th><th></th>
+          </tr></thead>
+          <tbody id="tbody"><tr><td colspan="8" class="empty-state">Carregando...</td></tr></tbody>
+        </table>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-top:1px solid var(--border)">
+          <span id="pag-info" style="font-size:12px;color:var(--text-muted)"></span>
+          <div style="display:flex;gap:6px" id="pag-botoes"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="fecharModal()">✕</button>
+    <div id="modal-conteudo"></div>
+  </div>
+</div>
+
+<script src="auth.js"></script>
+<script>
+const u = requireAuth();
+if (u) {
+  buildSidebar('/solicitacoes');
+  buildTopbar('Solicitações');
+  if (['supervisor','vendedor'].includes(u.papel)) {
+    document.getElementById('formSection').style.display = 'block';
+    carregarClientesForm();
+  }
+  document.getElementById('filtro-data').value = new Date().toISOString().slice(0, 10);
+  carregarSolicitacoes();
+}
+
+let todasSolicits = [], filtradas = [], clientesLista = [];
+const POR_PAGINA = 10;
+let paginaAtual = 1;
+
+async function carregarClientesForm() {
+  const res = await fetch('/api/clientes?por_pagina=100');
+  const data = await res.json();
+  clientesLista = data.clientes || [];
+}
+
+function filtrarClientes(termo) {
+  document.getElementById('cliente_id').value = '';
+  const lista = document.getElementById('cliente-lista');
+  const t = termo.toLowerCase().replace(/\D/g, '') || termo.toLowerCase();
+  const filtrados = clientesLista.filter(c => {
+    const nomeMatch = c.nome.toLowerCase().includes(termo.toLowerCase());
+    const docMatch  = (c.documento || '').replace(/\D/g, '').includes(termo.replace(/\D/g, ''));
+    return nomeMatch || (termo.replace(/\D/g, '') && docMatch);
+  });
+  if (!filtrados.length) {
+    lista.innerHTML = '<div class="autocomplete-item" style="color:var(--text-muted)">Nenhum cliente encontrado</div>';
+  } else {
+    lista.innerHTML = filtrados.map(c =>
+      `<div class="autocomplete-item" onmousedown="selecionarCliente(${c.pessoa_id}, '${c.nome.replace(/'/g,"\\'")}')">
+        ${c.nome}${c.documento ? `<span style="color:var(--text-muted);font-size:11px;margin-left:8px">${c.documento}</span>` : ''}
+       </div>`
+    ).join('');
+  }
+  lista.classList.add('open');
+}
+
+function selecionarCliente(id, nome) {
+  document.getElementById('cliente_id').value = id;
+  document.getElementById('cliente-busca').value = nome;
+  document.getElementById('cliente-lista').classList.remove('open');
+}
+
+function abrirLista() {
+  const busca = document.getElementById('cliente-busca').value;
+  if (busca) filtrarClientes(busca);
+}
+
+function fecharListaDelay() {
+  setTimeout(() => document.getElementById('cliente-lista').classList.remove('open'), 150);
+}
+
+async function carregarSolicitacoes() {
+  const res = await fetch('/api/solicitacoes');
+  todasSolicits = await res.json();
+  filtrar();
+}
+
+function filtrar() {
+  const cliente = document.getElementById('filtro-cliente').value.toLowerCase();
+  const status  = document.getElementById('filtro-status').value.toLowerCase();
+  const tipo    = document.getElementById('filtro-tipo').value;
+  const data    = document.getElementById('filtro-data').value;
+  const outrosFiltrosAtivos = cliente || status || tipo;
+  filtradas = (!data && !outrosFiltrosAtivos) ? [] : todasSolicits.filter(s =>
+    (!data    || s.data_criacao.startsWith(data)) &&
+    (!cliente || (s.cliente||'').toLowerCase().includes(cliente) || (/\d/.test(cliente) && (s.documento||'').replace(/\D/g,'').includes(cliente.replace(/\D/g,'')))) &&
+    (!status  || (s.status||'').toLowerCase() === status) &&
+    (!tipo    || s.tipo === tipo)
+  );
+  paginaAtual = 1;
+  renderizar();
+}
+
+function limparFiltros() {
+  ['filtro-cliente','filtro-status','filtro-tipo','filtro-data'].forEach(id => document.getElementById(id).value = '');
+  filtrar();
+}
+
+function renderizar() {
+  const total  = filtradas.length;
+  const inicio = (paginaAtual - 1) * POR_PAGINA;
+  const pagina = filtradas.slice(inicio, inicio + POR_PAGINA);
+  const fim    = Math.min(inicio + POR_PAGINA, total);
+
+  document.getElementById('contador').textContent =
+    total === todasSolicits.length ? `${total} solicitações` : `${total} de ${todasSolicits.length} solicitações`;
+
+  const tbody = document.getElementById('tbody');
+  if (!pagina.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhuma solicitação encontrada</td></tr>';
+  } else {
+    tbody.innerHTML = pagina.map(s => `
+      <tr style="cursor:pointer" onclick="abrirDetalhe(${s.solicitacao_id})">
+        <td class="text-muted">#${s.solicitacao_id}</td>
+        <td><strong>${s.cliente}</strong></td>
+        <td class="text-muted">${s.vendedor||'—'}</td>
+        <td>${s.tipo}</td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.descricao}</td>
+        <td>${badgeStatus(s.status)}</td>
+        <td class="text-muted">${formatDate(s.data_criacao)}</td>
+        <td><span style="color:var(--text-muted);font-size:16px">›</span></td>
+      </tr>`).join('');
+  }
+  renderizarPaginacao(total, fim);
+}
+
+function renderizarPaginacao(total, fim) {
+  const totalPags = Math.ceil(total / POR_PAGINA);
+  const inicio    = (paginaAtual - 1) * POR_PAGINA + 1;
+  document.getElementById('pag-info').textContent = total ? `Exibindo ${inicio}–${fim} de ${total}` : '';
+  const botoes = document.getElementById('pag-botoes');
+  if (totalPags <= 1) { botoes.innerHTML = ''; return; }
+  let html = `<button onclick="irPara(${paginaAtual-1})" ${paginaAtual===1?'disabled':''} ${btnStyle()}>‹ Ant.</button>`;
+  for (let i = 1; i <= totalPags; i++) {
+    if (totalPags > 7 && i > 2 && i < totalPags-1 && Math.abs(i-paginaAtual) > 1) {
+      if (i===3||i===totalPags-2) html += `<span style="padding:0 4px;color:var(--text-muted)">…</span>`;
+      continue;
+    }
+    html += `<button onclick="irPara(${i})" ${btnStyle(i===paginaAtual)}>${i}</button>`;
+  }
+  html += `<button onclick="irPara(${paginaAtual+1})" ${paginaAtual===totalPags?'disabled':''} ${btnStyle()}>Próx. ›</button>`;
+  botoes.innerHTML = html;
+}
+
+function btnStyle(ativo=false) {
+  return `style="padding:5px 10px;border-radius:5px;font-size:12px;cursor:pointer;border:1px solid var(--border);background:${ativo?'var(--red)':'var(--card)'};color:${ativo?'#fff':'var(--text)'}"`;
+}
+
+function irPara(pag) {
+  const total = Math.ceil(filtradas.length / POR_PAGINA);
+  if (pag < 1 || pag > total) return;
+  paginaAtual = pag;
+  renderizar();
+}
+
+async function abrirDetalhe(id) {
+  document.getElementById('modal-conteudo').innerHTML = '<p style="color:var(--text-muted)">Carregando...</p>';
+  document.getElementById('modal').classList.add('open');
+
+  const res = await fetch(`/api/solicitacoes/${id}`);
+  const s   = await res.json();
+  const podeEditar = ['supervisor','vendedor'].includes(u.papel) && s.status !== 'finalizado' && s.status !== 'cancelado';
+  const podeCancelar = ['supervisor','vendedor'].includes(u.papel) && s.status !== 'cancelado' && s.status !== 'finalizado';
+
+  const optsClientes = clientesLista.length
+    ? clientesLista.map(c => `<option value="${c.pessoa_id}" ${c.pessoa_id==s.cliente_id?'selected':''}>${c.nome}</option>`).join('')
+    : `<option value="${s.cliente_id}" selected>${s.cliente}</option>`;
+
+  document.getElementById('modal-conteudo').innerHTML = `
+    <div class="modal-title">Solicitação #${s.solicitacao_id}</div>
+
+    <div class="info-grid">
+      <div class="info-item"><label>Cliente</label><strong>${s.cliente}</strong></div>
+      <div class="info-item"><label>Vendedor</label>${s.vendedor||'—'}</div>
+      <div class="info-item"><label>Tipo</label>${s.tipo}</div>
+      <div class="info-item"><label>Status</label>${badgeStatus(s.status)}</div>
+      <div class="info-item" style="grid-column:1/-1"><label>Descrição</label><span style="color:var(--text-muted)">${s.descricao}</span></div>
+    </div>
+
+    ${podeEditar ? `
+    <div style="border-top:1px solid var(--border);padding-top:16px;margin-bottom:20px">
+      <div class="form-title" style="font-size:14px;margin-bottom:12px">Editar Solicitação</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Cliente</label>
+          <select id="edit-cliente">${optsClientes}</select>
+        </div>
+        <div class="form-group">
+          <label>Tipo</label>
+          <select id="edit-tipo">
+            ${['Corte','Dobra','Laser','Pintura','Outro'].map(t=>`<option ${t===s.tipo?'selected':''}>${t}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group full">
+          <label>Descrição</label>
+          <textarea id="edit-descricao">${s.descricao}</textarea>
+        </div>
+      </div>
+      <div class="form-actions" style="gap:10px">
+        <button class="btn btn-primary" onclick="salvarEdicao(${s.solicitacao_id})">Salvar Alterações</button>
+        ${podeCancelar ? `<button onclick="cancelarSolicitacao(${s.solicitacao_id})" style="padding:8px 18px;border-radius:6px;border:1px solid #e74c3c;background:transparent;color:#e74c3c;cursor:pointer;font-size:13px">Cancelar Solicitação</button>` : ''}
+        <p id="msg-modal" class="msg-hidden"></p>
+      </div>
+    </div>` : ''}
+
+    <div style="border-top:1px solid var(--border);padding-top:16px">
+      <div class="form-title" style="font-size:14px;margin-bottom:14px">Histórico de Status</div>
+      ${s.historico.length ? `
+      <div class="timeline">
+        ${s.historico.map(h => `
+          <div class="timeline-item">
+            <div class="timeline-dot">◉</div>
+            <div class="timeline-content">
+              <div class="timeline-header">
+                ${badgeStatus(h.status)}
+                <span style="font-size:11px;color:var(--text-muted)">${formatDateTime(h.data_criacao)}</span>
+                ${h.usuario ? `<span style="font-size:11px;color:var(--text-muted)">· ${h.usuario}</span>` : ''}
+              </div>
+              ${h.observacao ? `<div class="timeline-obs">${h.observacao}</div>` : ''}
+            </div>
+          </div>`).join('')}
+      </div>` : '<p style="color:var(--text-muted);font-size:13px">Nenhuma alteração de status registrada.</p>'}
+    </div>
+  `;
+}
+
+function fecharModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+document.getElementById('modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal')) fecharModal();
+});
+
+async function salvarEdicao(id) {
+  const dados = {
+    cliente_id: document.getElementById('edit-cliente').value,
+    tipo: document.getElementById('edit-tipo').value,
+    descricao: document.getElementById('edit-descricao').value
+  };
+  const ok = validar([
+    ['msg-modal', !dados.cliente_id ? 'Selecione um cliente.' : null],
+    ['msg-modal', dados.descricao.trim().length < 10 ? 'Descrição deve ter no mínimo 10 caracteres.' : null],
+  ]);
+  if (!ok) return;
+
+  const res = await fetch(`/api/solicitacoes/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(dados)
+  });
+  const r = await res.json();
+  if (r.sucesso) {
+    showMsg('msg-modal', r.mensagem, 'ok');
+    await carregarSolicitacoes();
+    setTimeout(() => abrirDetalhe(id), 500);
+  } else {
+    showMsg('msg-modal', r.erro || 'Erro ao salvar.', 'erro');
+  }
+}
+
+async function cancelarSolicitacao(id) {
+  if (!confirm('Tem certeza que deseja cancelar esta solicitação?')) return;
+  const res = await fetch(`/api/solicitacoes/${id}/cancelar`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ usuario_id: u.pessoa_id })
+  });
+  const r = await res.json();
+  if (r.sucesso) {
+    fecharModal();
+    carregarSolicitacoes();
+  } else {
+    showMsg('msg-modal', r.erro || 'Erro ao cancelar.', 'erro');
+  }
+}
+
+async function criarSolicitacao() {
+  const dados = {
+    cliente_id: document.getElementById('cliente_id').value,
+    tipo: document.getElementById('tipo').value,
+    descricao: document.getElementById('descricao').value,
+    vendedor_id: u.pessoa_id
+  };
+  const ok = validar([
+    ['msg', !dados.cliente_id ? 'Selecione um cliente.' : null],
+    ['msg', !dados.descricao.trim() ? 'Descrição é obrigatória.' : null],
+    ['msg', dados.descricao.trim().length < 10 ? 'Descrição deve ter no mínimo 10 caracteres.' : null],
+  ]);
+  if (!ok) return;
+
+  const res = await fetch('/api/solicitacoes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(dados)
+  });
+  const r = await res.json();
+  if (r.sucesso) {
+    showMsg('msg', r.mensagem, 'ok');
+    document.getElementById('descricao').value = '';
+    document.getElementById('cliente_id').value = '';
+    document.getElementById('cliente-busca').value = '';
+    carregarSolicitacoes();
+  } else {
+    showMsg('msg', r.erro || 'Erro ao criar.', 'erro');
+  }
+}
+</script>
+</body>
+</html>

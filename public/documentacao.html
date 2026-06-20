@@ -47,7 +47,6 @@
 
   <script>
 
-    // Carrega clientes no select
     async function carregarClientes() {
       const res = await fetch('/api/clientes');
       const clientes = await res.json();
@@ -57,7 +56,6 @@
       });
     }
 
-    // Carrega lista de solicitações
     async function carregarSolicitacoes() {
       const res = await fetch('/api/solicitacoes');
       const lista = await res.json();

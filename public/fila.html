@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>PLO — Fila de Orçamentos</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .modal-overlay { display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;align-items:center;justify-content:center }
+    .modal-overlay.open { display:flex }
+    .modal-box { background:var(--card);border:1px solid var(--border);border-radius:12px;width:100%;max-width:520px;padding:28px;position:relative }
+    .modal-close { position:absolute;top:16px;right:20px;background:transparent;border:none;color:var(--text-muted);font-size:20px;cursor:pointer }
+    .modal-title { font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;margin-bottom:20px }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar" id="topbar"></div>
+    <div class="page-content">
+
+      <div id="resumo" style="display:flex;gap:14px;margin-bottom:20px"></div>
+
+      <div class="table-card" style="margin-bottom:20px">
+        <div class="table-card-header">
+          <span class="table-card-title">Meus Chamados</span>
+          <span id="meus-contador" style="font-size:12px;color:var(--text-muted)"></span>
+        </div>
+        <table class="data-table">
+          <thead><tr>
+            <th>#</th><th>Cliente</th><th>Vendedor</th><th>Tipo</th><th>Descrição</th><th>Data</th><th></th>
+          </tr></thead>
+          <tbody id="tbody-meus">
+            <tr><td colspan="7" class="empty-state">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-card">
+        <div class="table-card-header">
+          <span class="table-card-title">Fila de Orçamentos</span>
+          <span id="contador" style="font-size:12px;color:var(--text-muted)"></span>
+        </div>
+        <table class="data-table">
+          <thead><tr>
+            <th>#</th><th>Cliente</th><th>Vendedor</th><th>Tipo</th><th>Descrição</th><th>Data</th><th></th>
+          </tr></thead>
+          <tbody id="tbody">
+            <tr><td colspan="7" class="empty-state">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="fecharModal()">✕</button>
+    <div class="modal-title" id="modal-title"></div>
+    <div class="form-group full" style="margin-bottom:16px">
+      <label>Observação</label>
+      <textarea id="modal-obs" placeholder="Descreva brevemente a ação realizada..."></textarea>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" id="modal-btn" onclick="confirmarStatus()">Confirmar</button>
+      <p id="modal-msg" class="msg-hidden"></p>
+    </div>
+  </div>
+</div>
+
+<script src="auth.js"></script>
+<script>
+const u = requirePapel(['desenhista','supervisor']);
+if (u) {
+  buildSidebar('/fila');
+  buildTopbar('Fila de Orçamentos');
+  carregarFila();
+}
+
+let solicitacaoAtiva = null, statusAlvo = null;
+
+async function carregarFila() {
+  const res = await fetch(`/api/dashboard/desenhista?usuario_id=${u.pessoa_id}`);
+  const d   = await res.json();
+
+  const abertos      = d.fila;
+  const meusChamados = d.meus_chamados;
+
+  document.getElementById('resumo').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Finalizados Hoje</div><div class="stat-value">${d.finalizados_hoje}</div></div>
+    <div class="stat-card"><div class="stat-label">Tempo Médio (h)</div><div class="stat-value">${d.tempo_medio ? d.tempo_medio.toFixed(1) : '—'}</div></div>
+  `;
+
+  document.getElementById('meus-contador').textContent = `${meusChamados.length} em andamento`;
+  document.getElementById('tbody-meus').innerHTML = meusChamados.length
+    ? meusChamados.map(s => `
+        <tr>
+          <td class="text-muted">#${s.solicitacao_id}</td>
+          <td><strong>${s.cliente}</strong></td>
+          <td class="text-muted">${s.vendedor || '—'}</td>
+          <td>${s.tipo}</td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.descricao}</td>
+          <td class="text-muted">${formatDate(s.data_criacao)}</td>
+          <td><button onclick="abrirModal(${s.solicitacao_id},'finalizado','Finalizar')"
+                style="padding:4px 12px;border-radius:5px;font-size:12px;cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--text)">
+                Finalizar
+              </button></td>
+        </tr>`).join('')
+    : '<tr><td colspan="7" class="empty-state">Nenhum chamado capturado no momento.</td></tr>';
+
+  document.getElementById('contador').textContent = `${abertos.length} disponível(is)`;
+  document.getElementById('tbody').innerHTML = abertos.length
+    ? abertos.map(s => `
+        <tr>
+          <td class="text-muted">#${s.solicitacao_id}</td>
+          <td><strong>${s.cliente}</strong></td>
+          <td class="text-muted">${s.vendedor || '—'}</td>
+          <td>${s.tipo}</td>
+          <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.descricao}</td>
+          <td class="text-muted">${formatDate(s.data_criacao)}</td>
+          <td><button onclick="abrirModal(${s.solicitacao_id},'em andamento','Capturar')"
+                style="padding:4px 12px;border-radius:5px;font-size:12px;cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--text)">
+                Capturar
+              </button></td>
+        </tr>`).join('')
+    : '<tr><td colspan="7" class="empty-state">Nenhum chamado disponível na fila.</td></tr>';
+}
+
+function abrirModal(id, status, label) {
+  solicitacaoAtiva = id;
+  statusAlvo       = status;
+  document.getElementById('modal-title').textContent = `${label} Solicitação #${id}`;
+  document.getElementById('modal-obs').value = '';
+  document.getElementById('modal-msg').className = 'msg-hidden';
+  document.getElementById('modal-btn').textContent = label;
+  document.getElementById('modal').classList.add('open');
+}
+
+function fecharModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+document.getElementById('modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal')) fecharModal();
+});
+
+async function confirmarStatus() {
+  const obs = document.getElementById('modal-obs').value;
+  if (!obs || obs.trim().length < 5) {
+    showMsg('modal-msg', 'Observação deve ter no mínimo 5 caracteres.', 'erro');
+    return;
+  }
+  const res = await fetch('/api/status', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ solicitacao_id: solicitacaoAtiva, status_nome: statusAlvo, observacao: obs, usuario_id: u.pessoa_id })
+  });
+  const r = await res.json();
+  if (r.sucesso) {
+    fecharModal();
+    carregarFila();
+  } else {
+    showMsg('modal-msg', r.erro || 'Erro ao atualizar status.', 'erro');
+  }
+}
+</script>
+</body>
+</html>

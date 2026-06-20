@@ -1,0 +1,5 @@
+.env
+.vs/
+server.log
+dev_joao.session.sql
+node_modules/
