@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>PLO — Alterar Status</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .search-wrapper { position:relative }
+    .search-dropdown {
+      display:none;position:absolute;top:100%;left:0;right:0;z-index:50;
+      background:var(--card);border:1px solid var(--border);border-radius:6px;
+      max-height:220px;overflow-y:auto;margin-top:4px;box-shadow:0 4px 16px rgba(0,0,0,.4)
+    }
+    .search-dropdown.open { display:block }
+    .search-option {
+      padding:10px 14px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);
+      display:flex;align-items:center;gap:10px
+    }
+    .search-option:last-child { border-bottom:none }
+    .search-option:hover, .search-option.active { background:var(--bg) }
+    .search-option .opt-id { color:var(--text-muted);font-size:11px;min-width:30px }
+    .search-option .opt-nome { font-weight:600;flex:1 }
+    .search-option .opt-tipo { color:var(--text-muted);font-size:11px }
+    .search-option .opt-badge { font-size:10px;padding:2px 8px;border-radius:10px }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar" id="topbar"></div>
+    <div class="page-content">
+
+      <div class="form-section">
+        <div class="form-title">Alterar Status da Solicitação</div>
+        <div class="form-grid">
+          <div class="form-group full">
+            <label>Solicitação</label>
+            <div class="search-wrapper">
+              <input id="busca-sol" placeholder="Buscar por cliente ou nº da solicitação..."
+                autocomplete="off" oninput="buscarSolicitacao()" onfocus="abrirDropdown()"
+                style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:9px 12px;color:var(--text);font-size:13px;box-sizing:border-box">
+              <div class="search-dropdown" id="sol-dropdown"></div>
+            </div>
+            <input type="hidden" id="solicitacao_id">
+          </div>
+
+          <div class="form-group" id="grupo-status" style="display:none">
+            <label>Novo Status</label>
+            <select id="status">
+              <option value="aberto">Aberto</option>
+              <option value="em andamento">Em Andamento</option>
+              <option value="finalizado">Finalizado</option>
+              <option value="cancelado">Cancelado</option>
+            </select>
+          </div>
+
+          <div class="form-group full" id="grupo-obs" style="display:none">
+            <label>Observação (obrigatória)</label>
+            <textarea id="observacao" placeholder="Descreva o andamento ou motivo da alteração..."></textarea>
+          </div>
+        </div>
+        <div class="form-actions" id="grupo-btn" style="display:none">
+          <button class="btn btn-primary" onclick="atualizarStatus()">Atualizar Status</button>
+          <p id="msg" class="msg-hidden"></p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<script src="auth.js"></script>
+<script>
+const u = requirePapel(['supervisor','desenhista']);
+if (u) {
+  buildSidebar('/status');
+  buildTopbar('Alterar Status');
+  carregarSolicitacoes();
+}
+
+let todasSols = [];
+
+async function carregarSolicitacoes() {
+  const res = await fetch('/api/solicitacoes');
+  todasSols = await res.json();
+}
+
+function buscarSolicitacao() {
+  document.getElementById('solicitacao_id').value = '';
+  esconderFormulario();
+  abrirDropdown();
+}
+
+function abrirDropdown() {
+  const termo = document.getElementById('busca-sol').value.toLowerCase().trim();
+  const dropdown = document.getElementById('sol-dropdown');
+
+  const ativos = todasSols.filter(s => s.status === 'aberto' || s.status === 'em andamento');
+  const base   = termo ? todasSols : ativos;
+  const lista  = base.filter(s =>
+    !termo ||
+    (s.cliente||'').toLowerCase().includes(termo) ||
+    String(s.solicitacao_id).includes(termo)
+  ).slice(0, 30);
+
+  if (!lista.length) {
+    dropdown.innerHTML = '<div class="search-option" style="color:var(--text-muted);cursor:default">Nenhuma solicitação encontrada</div>';
+  } else {
+    dropdown.innerHTML = lista.map(s => `
+      <div class="search-option" onclick="selecionarSolicitacao(${s.solicitacao_id}, '${(s.cliente||'').replace(/'/g,"\\'")} — #${s.solicitacao_id}', '${s.status}')">
+        <span class="opt-id">#${s.solicitacao_id}</span>
+        <span class="opt-nome">${s.cliente}</span>
+        <span class="opt-tipo">${s.tipo}</span>
+        <span class="opt-badge" style="${badgeStyle(s.status)}">${s.status}</span>
+      </div>`).join('');
+  }
+
+  dropdown.classList.add('open');
+}
+
+function badgeStyle(status) {
+  const cores = {
+    'aberto':       'background:#1a3a4a;color:#3498db',
+    'em andamento': 'background:#3a2a1a;color:#e67e22',
+    'finalizado':   'background:#1a4a2e;color:#2ecc71',
+    'cancelado':    'background:#4a1a1a;color:#e74c3c',
+  };
+  return cores[status] || 'background:var(--bg);color:var(--text-muted)';
+}
+
+function selecionarSolicitacao(id, label, statusAtual) {
+  document.getElementById('solicitacao_id').value = id;
+  document.getElementById('busca-sol').value = label;
+  document.getElementById('sol-dropdown').classList.remove('open');
+
+  const statusMap = { 'aberto': 'aberto', 'em andamento': 'em andamento', 'finalizado': 'finalizado', 'cancelado': 'cancelado' };
+  document.getElementById('status').value = statusMap[statusAtual] || 'aberto';
+
+  document.getElementById('grupo-status').style.display = '';
+  document.getElementById('grupo-obs').style.display = '';
+  document.getElementById('grupo-btn').style.display = '';
+}
+
+function esconderFormulario() {
+  document.getElementById('grupo-status').style.display = 'none';
+  document.getElementById('grupo-obs').style.display = 'none';
+  document.getElementById('grupo-btn').style.display = 'none';
+}
+
+document.addEventListener('click', e => {
+  if (!document.querySelector('.search-wrapper').contains(e.target)) {
+    document.getElementById('sol-dropdown').classList.remove('open');
+  }
+});
+
+async function atualizarStatus() {
+  const solicitacao_id = document.getElementById('solicitacao_id').value;
+  const status_nome    = document.getElementById('status').value;
+  const observacao     = document.getElementById('observacao').value;
+
+  const ok = validar([
+    ['msg', !solicitacao_id ? 'Selecione uma solicitação.' : null],
+    ['msg', !observacao.trim() ? 'Observação é obrigatória.' : null],
+    ['msg', observacao.trim().length < 5 ? 'Observação deve ter no mínimo 5 caracteres.' : null],
+  ]);
+  if (!ok) return;
+
+  const res = await fetch('/api/status', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ solicitacao_id, status_nome, observacao, usuario_id: u.pessoa_id })
+  });
+  const r = await res.json();
+  if (r.sucesso) {
+    showMsg('msg', r.mensagem, 'ok');
+    document.getElementById('observacao').value = '';
+    document.getElementById('busca-sol').value  = '';
+    document.getElementById('solicitacao_id').value = '';
+    esconderFormulario();
+    await carregarSolicitacoes();
+  } else {
+    showMsg('msg', r.erro || 'Erro ao atualizar.', 'erro');
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>PLO — Orçamentos</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .modal-overlay { display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;align-items:center;justify-content:center }
+    .modal-overlay.open { display:flex }
+    .modal-box { background:var(--card);border:1px solid var(--border);border-radius:12px;width:100%;max-width:480px;padding:28px;position:relative }
+    .modal-close { position:absolute;top:16px;right:20px;background:transparent;border:none;color:var(--text-muted);font-size:20px;cursor:pointer }
+    .modal-title { font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;margin-bottom:20px }
+    .badge-aprovado   { background:#1a4a2e;color:#2ecc71;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600 }
+    .badge-recusado   { background:#4a1a1a;color:#e74c3c;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600 }
+    .badge-pendente-ap { background:#3a3a1a;color:#f39c12;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600 }
+    .autocomplete-wrap { position:relative }
+    .autocomplete-list { position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:6px;max-height:220px;overflow-y:auto;z-index:50;display:none }
+    .autocomplete-list.open { display:block }
+    .autocomplete-item { padding:9px 12px;font-size:13px;cursor:pointer }
+    .autocomplete-item:hover { background:var(--bg) }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar" id="topbar"></div>
+    <div class="page-content">
+
+      <div class="form-section">
+        <div class="form-title">Finalizar Orçamento</div>
+        <div class="form-grid">
+          <div class="form-group full">
+            <label>Cliente</label>
+            <div class="autocomplete-wrap">
+              <input type="text" id="cliente-busca" placeholder="Digite o nome ou CPF do cliente..." autocomplete="off"
+                oninput="filtrarClientes(this.value)" onblur="fecharListaDelay()">
+              <div class="autocomplete-list" id="cliente-lista"></div>
+            </div>
+            <small id="hint-solicitacoes" style="color:var(--text-muted);font-size:11px;margin-top:4px;display:block"></small>
+          </div>
+          <div class="form-group full">
+            <label>Solicitação</label>
+            <select id="solicitacao_id"><option value="">Selecione a solicitação...</option></select>
+          </div>
+          <div class="form-group">
+            <label>Código do Orçamento</label>
+            <input id="numero_pedido" placeholder="Ex: ORC-2026-001">
+          </div>
+          <div class="form-group">
+            <label>Valor Total (R$)</label>
+            <input id="valor_total" type="number" step="0.01" placeholder="0,00">
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" onclick="finalizar()">Finalizar Orçamento</button>
+          <p id="msg" class="msg-hidden"></p>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-card-header">
+          <span class="table-card-title">Orçamentos Finalizados</span>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="filtro-aprovacao" onchange="filtrar()" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px">
+              <option value="">Todos</option>
+              <option value="pendente" selected>Aguardando resposta</option>
+              <option value="true">Aprovados</option>
+              <option value="false">Recusados</option>
+            </select>
+          </div>
+        </div>
+        <table class="data-table">
+          <thead><tr>
+            <th>Nº Pedido</th><th>Cliente</th><th>Serviço</th><th>Valor Total</th><th>Data</th><th>Aprovação</th><th></th>
+          </tr></thead>
+          <tbody id="tbody"><tr><td colspan="7" class="empty-state">Carregando...</td></tr></tbody>
+        </table>
+        <div id="paginacao" style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-top:1px solid var(--border)">
+          <span id="pag-info" style="font-size:12px;color:var(--text-muted)"></span>
+          <div style="display:flex;gap:6px" id="pag-botoes"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="fecharModal()">✕</button>
+    <div class="modal-title">Registrar Resposta do Cliente</div>
+    <div id="modal-info" style="margin-bottom:16px;padding:12px;background:var(--bg);border-radius:8px;font-size:13px;color:var(--text-muted)"></div>
+    <div class="form-group" style="margin-bottom:16px">
+      <label>Resposta do Cliente</label>
+      <div style="display:flex;gap:10px;margin-top:8px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 16px;border:2px solid var(--border);border-radius:8px;flex:1;transition:.2s" id="label-sim">
+          <input type="radio" name="aprovado" value="true" onchange="destacarOpcao()"> ✓ Cliente Aprovou
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 16px;border:2px solid var(--border);border-radius:8px;flex:1;transition:.2s" id="label-nao">
+          <input type="radio" name="aprovado" value="false" onchange="destacarOpcao()"> ✕ Cliente Recusou
+        </label>
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:20px">
+      <label>Observação (opcional)</label>
+      <textarea id="obs-aprovacao" placeholder="Ex: Cliente solicitou desconto, pediu prazo maior..." style="margin-top:6px;width:100%;resize:vertical"></textarea>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" onclick="registrarAprovacao()">Confirmar</button>
+      <p id="msg-modal" class="msg-hidden"></p>
+    </div>
+  </div>
+</div>
+
+<script src="auth.js"></script>
+<script>
+let orcamentosCache = [];
+let orcamentoSelecionado = null;
+const POR_PAGINA = 10;
+let paginaAtual  = 1;
+let totalGlobal  = 0;
+let solicitacoesCache = [];
+let clientesLista = [];
+let clienteSelecionadoId = null;
+
+const u = requirePapel(['supervisor','vendedor']);
+if (u) {
+  buildSidebar('/orcamento');
+  buildTopbar('Orçamentos');
+  carregarClientes();
+  carregarSolicitacoes();
+  carregarOrcamentos();
+}
+
+async function carregarClientes() {
+  const res = await fetch('/api/clientes?por_pagina=200');
+  const data = await res.json();
+  clientesLista = data.clientes || [];
+}
+
+async function carregarSolicitacoes() {
+  try {
+    const res = await fetch('/api/solicitacoes');
+    const lista = await res.json();
+    if (!Array.isArray(lista)) return;
+    solicitacoesCache = lista.filter(s => !s.tem_orcamento);
+  } catch (err) {
+    console.error('Erro ao carregar solicitações:', err);
+  }
+}
+
+function filtrarClientes(termo) {
+  clienteSelecionadoId = null;
+  document.getElementById('solicitacao_id').innerHTML = '<option value="">Selecione a solicitação...</option>';
+  document.getElementById('hint-solicitacoes').textContent = '';
+
+  const lista = document.getElementById('cliente-lista');
+  if (!termo.trim()) { lista.classList.remove('open'); return; }
+
+  const t = termo.toLowerCase();
+  const tDoc = termo.replace(/\D/g, '');
+  const filtrados = clientesLista.filter(c =>
+    c.nome.toLowerCase().includes(t) ||
+    (tDoc && (c.documento || '').replace(/\D/g, '').includes(tDoc))
+  );
+
+  if (!filtrados.length) {
+    lista.innerHTML = '<div class="autocomplete-item" style="color:var(--text-muted)">Nenhum cliente encontrado</div>';
+  } else {
+    lista.innerHTML = filtrados.map(c =>
+      `<div class="autocomplete-item" onmousedown="selecionarCliente(${c.pessoa_id}, '${c.nome.replace(/'/g,"\\'")}')">
+        ${c.nome}${c.documento ? `<span style="color:var(--text-muted);font-size:11px;margin-left:8px">${c.documento}</span>` : ''}
+       </div>`
+    ).join('');
+  }
+  lista.classList.add('open');
+}
+
+function selecionarCliente(id, nome) {
+  clienteSelecionadoId = id;
+  document.getElementById('cliente-busca').value = nome;
+  document.getElementById('cliente-lista').classList.remove('open');
+  renderizarOpcoesSolicitacao(solicitacoesCache.filter(s => s.cliente_id == id));
+}
+
+function fecharListaDelay() {
+  setTimeout(() => document.getElementById('cliente-lista').classList.remove('open'), 150);
+}
+
+function renderizarOpcoesSolicitacao(lista) {
+  const sel = document.getElementById('solicitacao_id');
+  sel.innerHTML = '<option value="">Selecione a solicitação...</option>';
+  const hint = document.getElementById('hint-solicitacoes');
+  if (clienteSelecionadoId && !lista.length) {
+    hint.textContent = 'Nenhuma solicitação em aberto para este cliente.';
+  } else if (lista.length) {
+    hint.textContent = `${lista.length} solicitação(ões) em aberto`;
+    lista.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.solicitacao_id;
+      opt.textContent = `#${s.solicitacao_id} — ${s.tipo} (${new Date(s.data_criacao).toLocaleDateString('pt-BR')})`;
+      sel.appendChild(opt);
+    });
+  } else {
+    hint.textContent = '';
+  }
+}
+
+async function carregarOrcamentos() {
+  try {
+    const aprovacao = document.getElementById('filtro-aprovacao').value;
+    const params = new URLSearchParams({ pagina: paginaAtual, por_pagina: POR_PAGINA });
+    if (aprovacao) params.set('aprovacao', aprovacao);
+
+    const res  = await fetch(`/api/orcamentos?${params}`);
+    const data = await res.json();
+
+    if (data.erro) throw new Error(data.erro);
+
+    orcamentosCache = data.orcamentos || [];
+    totalGlobal     = data.total      || 0;
+    renderizar(orcamentosCache);
+  } catch (err) {
+    console.error('Erro ao carregar orçamentos:', err);
+    document.getElementById('tbody').innerHTML =
+      `<tr><td colspan="7" class="empty-state">Erro ao carregar: ${err.message}</td></tr>`;
+  }
+}
+
+function filtrar() {
+  paginaAtual = 1;
+  carregarOrcamentos();
+}
+
+function badgeAprovacao(o) {
+  if (o.aprovado === true)  return '<span class="badge-aprovado">Aprovado</span>';
+  if (o.aprovado === false) return '<span class="badge-recusado">Recusado</span>';
+  return '<span class="badge-pendente-ap">Aguardando</span>';
+}
+
+function renderizar(lista) {
+  const tbody = document.getElementById('tbody');
+  if (!lista.length) {
+    const filtro = document.getElementById('filtro-aprovacao').value;
+    const msg = filtro === 'pendente'
+      ? 'Todos os orçamentos estão concluídos — nenhum aguardando resposta.'
+      : 'Nenhum orçamento encontrado.';
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">${msg}</td></tr>`;
+  } else {
+    tbody.innerHTML = lista.map(o => `
+      <tr>
+        <td><strong>${o.numero_pedido||'—'}</strong></td>
+        <td>${o.cliente}</td>
+        <td>${o.tipo||'—'}</td>
+        <td class="text-purple">${formatMoeda(o.valor_total)}</td>
+        <td class="text-muted">${formatDate(o.data_finalizacao)}</td>
+        <td>${badgeAprovacao(o)}</td>
+        <td>
+          ${o.aprovado === null ? `
+            <button onclick="abrirAprovacao(${o.id})" style="padding:4px 12px;border-radius:5px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:12px;cursor:pointer">
+              Registrar →
+            </button>` : `<span style="font-size:11px;color:var(--text-muted)">${formatDate(o.data_aprovacao)}</span>`}
+        </td>
+      </tr>`).join('');
+  }
+  renderizarPaginacao();
+}
+
+function renderizarPaginacao() {
+  const totalPags = Math.ceil(totalGlobal / POR_PAGINA);
+  const inicio    = totalGlobal ? (paginaAtual - 1) * POR_PAGINA + 1 : 0;
+  const fim       = Math.min(paginaAtual * POR_PAGINA, totalGlobal);
+
+  document.getElementById('pag-info').textContent =
+    totalGlobal ? `Exibindo ${inicio}–${fim} de ${totalGlobal}` : '';
+
+  const botoes = document.getElementById('pag-botoes');
+  if (totalPags <= 1) { botoes.innerHTML = ''; return; }
+
+  let html = `<button onclick="irPara(${paginaAtual - 1})" ${paginaAtual === 1 ? 'disabled' : ''} ${btnStyle()}>‹ Ant.</button>`;
+  for (let i = 1; i <= totalPags; i++) {
+    if (totalPags > 7 && i > 2 && i < totalPags - 1 && Math.abs(i - paginaAtual) > 1) {
+      if (i === 3 || i === totalPags - 2) html += `<span style="padding:0 4px;color:var(--text-muted)">…</span>`;
+      continue;
+    }
+    html += `<button onclick="irPara(${i})" ${btnStyle(i === paginaAtual)}>${i}</button>`;
+  }
+  html += `<button onclick="irPara(${paginaAtual + 1})" ${paginaAtual === totalPags ? 'disabled' : ''} ${btnStyle()}>Próx. ›</button>`;
+  botoes.innerHTML = html;
+}
+
+function btnStyle(ativo = false) {
+  return `style="padding:5px 10px;border-radius:5px;font-size:12px;cursor:pointer;border:1px solid var(--border);background:${ativo ? 'var(--red)' : 'var(--card)'};color:${ativo ? '#fff' : 'var(--text)'}"`;
+}
+
+function irPara(pag) {
+  if (pag < 1 || pag > Math.ceil(totalGlobal / POR_PAGINA)) return;
+  paginaAtual = pag;
+  carregarOrcamentos();
+}
+
+function abrirAprovacao(id) {
+  orcamentoSelecionado = orcamentosCache.find(o => o.id === id);
+  if (!orcamentoSelecionado) return;
+  document.getElementById('modal-info').innerHTML = `
+    <strong>${orcamentoSelecionado.cliente}</strong> · ${orcamentoSelecionado.tipo} ·
+    <strong class="text-purple">${formatMoeda(orcamentoSelecionado.valor_total)}</strong> ·
+    Nº ${orcamentoSelecionado.numero_pedido}`;
+  document.querySelectorAll('input[name="aprovado"]').forEach(r => r.checked = false);
+  document.getElementById('obs-aprovacao').value = '';
+  document.getElementById('label-sim').style.borderColor = 'var(--border)';
+  document.getElementById('label-nao').style.borderColor = 'var(--border)';
+  document.getElementById('modal').classList.add('open');
+}
+
+function destacarOpcao() {
+  const val = document.querySelector('input[name="aprovado"]:checked')?.value;
+  document.getElementById('label-sim').style.borderColor = val === 'true'  ? '#27ae60' : 'var(--border)';
+  document.getElementById('label-nao').style.borderColor = val === 'false' ? '#e74c3c' : 'var(--border)';
+}
+
+async function registrarAprovacao() {
+  const radio = document.querySelector('input[name="aprovado"]:checked');
+  if (!radio) { showMsg('msg-modal', 'Selecione a resposta do cliente.', 'erro'); return; }
+
+  const res = await fetch(`/api/orcamentos/${orcamentoSelecionado.id}/aprovacao`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      aprovado: radio.value === 'true',
+      obs_aprovacao: document.getElementById('obs-aprovacao').value.trim() || null
+    })
+  });
+  const r = await res.json();
+  if (r.sucesso) {
+    fecharModal();
+    carregarOrcamentos();
+  } else {
+    showMsg('msg-modal', r.erro || 'Erro ao registrar.', 'erro');
+  }
+}
+
+function fecharModal() {
+  document.getElementById('modal').classList.remove('open');
+  orcamentoSelecionado = null;
+}
+document.getElementById('modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal')) fecharModal();
+});
+
+async function finalizar() {
+  const solicitacao_id = document.getElementById('solicitacao_id').value;
+  const numero_pedido  = document.getElementById('numero_pedido').value.trim();
+  const valor_total    = document.getElementById('valor_total').value;
+
+  const ok = validar([
+    ['msg', !solicitacao_id ? 'Selecione uma solicitação.' : null],
+    ['msg', !numero_pedido  ? 'Código do orçamento é obrigatório.' : null],
+    ['msg', validarValor(valor_total)],
+  ]);
+  if (!ok) return;
+
+  const res = await fetch('/api/orcamentos', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ solicitacao_id, numero_pedido, valor_total })
+  });
+  const r = await res.json();
+  if (r.sucesso) {
+    showMsg('msg', r.mensagem, 'ok');
+    document.getElementById('numero_pedido').value = '';
+    document.getElementById('valor_total').value   = '';
+    document.getElementById('solicitacao_id').value = '';
+    document.getElementById('cliente-busca').value = '';
+    document.getElementById('hint-solicitacoes').textContent = '';
+    clienteSelecionadoId = null;
+    carregarOrcamentos();
+    carregarSolicitacoes();
+  } else {
+    showMsg('msg', r.erro || 'Erro ao finalizar.', 'erro');
+  }
+}
+</script>
+</body>
+</html>

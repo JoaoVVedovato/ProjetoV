@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>PLO — Clientes</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar" id="topbar"></div>
+    <div class="page-content">
+
+      <div class="form-section" id="formSection" style="display:none">
+        <div class="form-title">Novo Cliente</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Nome / Razão Social</label>
+            <input id="nome" placeholder="Nome completo ou empresa">
+          </div>
+          <div class="form-group">
+            <label>CPF / CNPJ</label>
+            <input id="documento" placeholder="000.000.000-00">
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input id="email" type="email" placeholder="email@empresa.com">
+          </div>
+          <div class="form-group">
+            <label>Telefone</label>
+            <input id="telefone" placeholder="(00) 00000-0000">
+          </div>
+          <div class="form-group">
+            <label>Cidade</label>
+            <input id="cidade" placeholder="Cidade">
+          </div>
+          <div class="form-group">
+            <label>Estado</label>
+            <input id="estado" placeholder="UF" maxlength="2">
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" onclick="salvarCliente()">Salvar Cliente</button>
+          <p id="msg" class="msg-hidden"></p>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-card-header">
+          <span class="table-card-title">Clientes Cadastrados</span>
+          <span id="contador" style="font-size:12px;color:var(--text-muted)"></span>
+        </div>
+
+        <div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;gap:10px;flex-wrap:wrap">
+          <input id="filtro-nome" placeholder="Buscar por nome..." oninput="filtrar()"
+            style="flex:1;min-width:160px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 12px;color:var(--text);font-size:13px">
+          <input id="filtro-doc" placeholder="CPF / CNPJ..." oninput="filtrar()"
+            style="width:160px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 12px;color:var(--text);font-size:13px">
+          <input id="filtro-cidade" placeholder="Cidade..." oninput="filtrar()"
+            style="width:140px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 12px;color:var(--text);font-size:13px">
+          <button onclick="limparFiltros()" style="background:transparent;border:1px solid var(--border);border-radius:6px;padding:7px 14px;color:var(--text-muted);font-size:12px;cursor:pointer">
+            Limpar
+          </button>
+        </div>
+
+        <table class="data-table">
+          <thead><tr>
+            <th>#</th><th>Nome</th><th>Email</th><th>Documento</th><th>Telefone</th><th>Cidade</th><th>Estado</th>
+          </tr></thead>
+          <tbody id="tbody"><tr><td colspan="7" class="empty-state">Carregando...</td></tr></tbody>
+        </table>
+
+        <div id="paginacao" style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-top:1px solid var(--border)">
+          <span id="pag-info" style="font-size:12px;color:var(--text-muted)"></span>
+          <div style="display:flex;gap:6px" id="pag-botoes"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<script src="auth.js"></script>
+<script>
+const u = requireAuth();
+if (u) {
+  buildSidebar('/clientes');
+  buildTopbar('Clientes');
+  if (['supervisor','vendedor'].includes(u.papel)) {
+    document.getElementById('formSection').style.display = 'block';
+  }
+  carregarClientes();
+}
+
+const POR_PAGINA = 10;
+let paginaAtual = 1;
+let totalGlobal  = 0;
+let filtroTimer  = null;
+
+async function carregarClientes() {
+  const nome   = document.getElementById('filtro-nome').value.trim();
+  const doc    = document.getElementById('filtro-doc').value.trim();
+  const cidade = document.getElementById('filtro-cidade').value.trim();
+
+  const params = new URLSearchParams({
+    pagina: paginaAtual,
+    por_pagina: POR_PAGINA,
+    nome, doc, cidade
+  });
+
+  const res  = await fetch(`/api/clientes?${params}`);
+  const data = await res.json();
+
+  totalGlobal = data.total || 0;
+  renderizar(data.clientes || []);
+}
+
+function filtrar() {
+  clearTimeout(filtroTimer);
+  filtroTimer = setTimeout(() => { paginaAtual = 1; carregarClientes(); }, 300);
+}
+
+function limparFiltros() {
+  document.getElementById('filtro-nome').value   = '';
+  document.getElementById('filtro-doc').value    = '';
+  document.getElementById('filtro-cidade').value = '';
+  paginaAtual = 1;
+  carregarClientes();
+}
+
+function renderizar(clientes) {
+  const tbody = document.getElementById('tbody');
+
+  document.getElementById('contador').textContent = `${totalGlobal} clientes`;
+
+  if (!clientes.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhum cliente encontrado</td></tr>';
+  } else {
+    tbody.innerHTML = clientes.map(c => `
+      <tr>
+        <td class="text-muted">${c.pessoa_id}</td>
+        <td><strong>${c.nome}</strong></td>
+        <td class="text-muted">${c.email || '—'}</td>
+        <td class="text-muted">${c.documento || '—'}</td>
+        <td class="text-muted">${c.telefone || '—'}</td>
+        <td class="text-muted">${c.cidade || '—'}</td>
+        <td class="text-muted">${c.estado || '—'}</td>
+      </tr>`).join('');
+  }
+
+  renderizarPaginacao();
+}
+
+function renderizarPaginacao() {
+  const totalPags = Math.ceil(totalGlobal / POR_PAGINA);
+  const inicio    = totalGlobal ? (paginaAtual - 1) * POR_PAGINA + 1 : 0;
+  const fim       = Math.min(paginaAtual * POR_PAGINA, totalGlobal);
+
+  document.getElementById('pag-info').textContent =
+    totalGlobal ? `Exibindo ${inicio}–${fim} de ${totalGlobal}` : '';
+
+  const botoes = document.getElementById('pag-botoes');
+  if (totalPags <= 1) { botoes.innerHTML = ''; return; }
+
+  let html = `<button onclick="irPara(${paginaAtual - 1})" ${paginaAtual === 1 ? 'disabled' : ''} ${btnStyle()}>‹ Ant.</button>`;
+  for (let i = 1; i <= totalPags; i++) {
+    if (totalPags > 7 && i > 2 && i < totalPags - 1 && Math.abs(i - paginaAtual) > 1) {
+      if (i === 3 || i === totalPags - 2) html += `<span style="padding:0 4px;color:var(--text-muted)">…</span>`;
+      continue;
+    }
+    html += `<button onclick="irPara(${i})" ${btnStyle(i === paginaAtual)}>${i}</button>`;
+  }
+  html += `<button onclick="irPara(${paginaAtual + 1})" ${paginaAtual === totalPags ? 'disabled' : ''} ${btnStyle()}>Próx. ›</button>`;
+  botoes.innerHTML = html;
+}
+
+function btnStyle(ativo = false) {
+  return `style="padding:5px 10px;border-radius:5px;font-size:12px;cursor:pointer;border:1px solid var(--border);background:${ativo ? 'var(--red)' : 'var(--card)'};color:${ativo ? '#fff' : 'var(--text)'}"`;
+}
+
+function irPara(pag) {
+  if (pag < 1 || pag > Math.ceil(totalGlobal / POR_PAGINA)) return;
+  paginaAtual = pag;
+  carregarClientes();
+}
+
+async function salvarCliente() {
+  const dados = {
+    nome: document.getElementById('nome').value,
+    documento: document.getElementById('documento').value,
+    email: document.getElementById('email').value,
+    telefone: document.getElementById('telefone').value,
+    cidade: document.getElementById('cidade').value,
+    estado: document.getElementById('estado').value
+  };
+  const ok = validar([
+    ['msg', validarNome(dados.nome)],
+    ['msg', dados.email ? validarEmail(dados.email) : null],
+    ['msg', validarDocumento(dados.documento)],
+    ['msg', validarTelefone(dados.telefone)],
+  ]);
+  if (!ok) return;
+
+  const res = await fetch('/api/clientes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(dados)
+  });
+  const r = await res.json();
+  if (r.sucesso) {
+    showMsg('msg', r.mensagem, 'ok');
+    ['nome','documento','email','telefone','cidade','estado'].forEach(id => document.getElementById(id).value = '');
+    carregarClientes();
+  } else {
+    showMsg('msg', r.erro || 'Erro ao salvar.', 'erro');
+  }
+}
+</script>
+</body>
+</html>

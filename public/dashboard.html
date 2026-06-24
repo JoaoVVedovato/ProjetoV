@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PLO — Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar" id="topbar"></div>
+    <div class="page-content" id="conteudo">
+      <p style="color:#888">Carregando...</p>
+    </div>
+  </div>
+</div>
+
+<script src="auth.js"></script>
+<script>
+const u = requireAuth();
+if (u) {
+  buildSidebar('/dashboard');
+  buildTopbar('Dashboard');
+
+  if (u.papel === 'supervisor') {
+    const topbar = document.getElementById('topbar');
+    topbar.innerHTML += `
+      <div style="display:flex;gap:6px;align-items:center">
+        <select id="periodo" onchange="trocarPeriodo()" style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px">
+          <option value="mes">Este mês</option>
+          <option value="semana">Esta semana</option>
+          <option value="ano">Este ano</option>
+          <option value="tudo" selected>Tudo</option>
+        </select>
+      </div>`;
+  }
+
+  if (u.papel === 'vendedor') {
+    const topbar = document.getElementById('topbar');
+    const btn = document.createElement('a');
+    btn.href = '/solicitacoes';
+    btn.className = 'btn btn-primary';
+    btn.textContent = '+ Nova Solicitação';
+    topbar.appendChild(btn);
+    carregarDashboardVendedor();
+  } else if (u.papel === 'desenhista') {
+    carregarDashboardDesenhista();
+  } else {
+    carregarDashboardSupervisor();
+  }
+}
+
+function calcularPeriodo(periodo) {
+  const hoje = new Date();
+  let inicio, fim = hoje.toISOString().split('T')[0];
+  if (periodo === 'semana') {
+    const d = new Date(hoje);
+    d.setDate(d.getDate() - d.getDay());
+    inicio = d.toISOString().split('T')[0];
+  } else if (periodo === 'mes') {
+    inicio = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}-01`;
+  } else if (periodo === 'ano') {
+    inicio = `${hoje.getFullYear()}-01-01`;
+  } else {
+    return '';
+  }
+  return `?inicio=${inicio}&fim=${fim}`;
+}
+
+function trocarPeriodo() {
+  const periodo = document.getElementById('periodo').value;
+  carregarDashboardSupervisor(periodo);
+}
+
+async function carregarDashboardSupervisor(periodo = 'tudo') {
+  try {
+    const qs = calcularPeriodo(periodo);
+    const res = await fetch(`/api/dashboard/resumo${qs}`);
+    const d = await res.json();
+    const taxa = d.taxa_conversao || 0;
+    const tempoMedio = d.tempo_medio != null ? d.tempo_medio + 'h' : '—';
+
+    document.getElementById('conteudo').innerHTML = `
+      <div class="kpi-grid" style="grid-template-columns: repeat(5, 1fr)">
+        <div class="kpi-card">
+          <div class="kpi-label">Total Orçamentos</div>
+          <div class="kpi-value">${d.total_orcamentos}</div>
+          <div class="kpi-sub">todas as solicitações</div>
+          <div class="kpi-icon">◆</div>
+        </div>
+        <div class="kpi-card purple">
+          <div class="kpi-label">Convertidos</div>
+          <div class="kpi-value">${d.convertidos}</div>
+          <div class="kpi-sub">${taxa}% de taxa</div>
+          <div class="kpi-icon">✓</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Valor Total Orçado</div>
+          <div class="kpi-value" style="font-size:20px">${formatMoeda(d.valor_total_orcado)}</div>
+          <div class="kpi-sub">no período</div>
+          <div class="kpi-icon">R$</div>
+        </div>
+        <div class="kpi-card purple">
+          <div class="kpi-label">Valor Convertido</div>
+          <div class="kpi-value" style="font-size:20px">${formatMoeda(d.valor_convertido)}</div>
+          <div class="kpi-sub">em pedidos</div>
+          <div class="kpi-icon">$</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Tempo Médio</div>
+          <div class="kpi-value">${tempoMedio}</div>
+          <div class="kpi-sub">entrega do orçamento</div>
+          <div class="kpi-icon">◔</div>
+        </div>
+      </div>
+
+      <div class="table-grid">
+        <div class="table-card" style="border:1px solid #c0392b44">
+          <div class="table-card-header">
+            <span class="table-card-title">Por Vendedor</span>
+          </div>
+          <table class="data-table">
+            <thead><tr>
+              <th>Vendedor</th><th>Total</th><th>Convertidos</th>
+            </tr></thead>
+            <tbody>
+              ${d.por_vendedor.length ? d.por_vendedor.map(v => `
+                <tr>
+                  <td>${v.vendedor || '—'}</td>
+                  <td>${v.total}</td>
+                  <td class="text-purple">${v.convertidos}</td>
+                </tr>`).join('') : '<tr><td colspan="3" class="empty-state">Nenhum dado</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="table-card">
+          <div class="table-card-header">
+            <span class="table-card-title">Por Desenhista</span>
+          </div>
+          <table class="data-table">
+            <thead><tr>
+              <th>Desenhista</th><th>Finalizados</th><th>T. Médio</th>
+            </tr></thead>
+            <tbody>
+              ${d.por_desenhista.length ? d.por_desenhista.map(des => `
+                <tr>
+                  <td>${des.desenhista}</td>
+                  <td>${des.finalizados}</td>
+                  <td class="text-muted">${des.tempo_medio ? des.tempo_medio + 'h' : '—'}</td>
+                </tr>`).join('') : '<tr><td colspan="3" class="empty-state">Nenhum dado</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  } catch(err) {
+    document.getElementById('conteudo').innerHTML = '<p style="color:#e74c3c">Erro ao carregar dashboard.</p>';
+  }
+}
+
+async function carregarDashboardVendedor() {
+  try {
+    const res = await fetch(`/api/dashboard/vendedor?vendedor_id=${u.pessoa_id}`);
+    const d = await res.json();
+
+    const badgeVendedor = (status) => {
+      const map = {
+        'aberto': ['badge-aberto', 'Pendente'],
+        'em andamento': ['badge-em-andamento', 'Aceito'],
+        'finalizado': ['badge-finalizado', 'Convertido'],
+        'cancelado': ['badge-cancelado', 'Cancelado'],
+      };
+      const [cls, label] = map[(status||'').toLowerCase()] || ['', status];
+      return `<span class="badge ${cls}">${label}</span>`;
+    };
+
+    document.getElementById('conteudo').innerHTML = `
+      <div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr)">
+        <div class="kpi-card">
+          <div class="kpi-label">Minhas Solicitações</div>
+          <div class="kpi-value">${d.total}</div>
+          <div class="kpi-sub">no total</div>
+          <div class="kpi-icon">◆</div>
+        </div>
+        <div class="kpi-card yellow">
+          <div class="kpi-label">Pendentes</div>
+          <div class="kpi-value">${d.pendentes}</div>
+          <div class="kpi-sub">aguardando desenhista</div>
+          <div class="kpi-icon">⏳</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Orc. Recebidos</div>
+          <div class="kpi-value">${d.orc_recebidos}</div>
+          <div class="kpi-sub">para analisar</div>
+          <div class="kpi-icon">◎</div>
+        </div>
+        <div class="kpi-card purple">
+          <div class="kpi-label">Convertidos</div>
+          <div class="kpi-value">${d.convertidos}</div>
+          <div class="kpi-sub">viraram pedido</div>
+          <div class="kpi-icon">✓</div>
+        </div>
+      </div>
+
+      <div class="table-grid">
+        <div class="table-card">
+          <div class="table-card-header">
+            <span class="table-card-title">Últimas Solicitações</span>
+            <a href="/solicitacoes" style="color:var(--text-muted);font-size:13px;text-decoration:none">Ver todas →</a>
+          </div>
+          <table class="data-table">
+            <thead><tr>
+              <th>Cliente</th><th>Status</th><th>Data</th>
+            </tr></thead>
+            <tbody>
+              ${d.ultimas_solicitacoes.length ? d.ultimas_solicitacoes.map(s => `
+                <tr>
+                  <td><strong>${s.cliente}</strong></td>
+                  <td>${badgeVendedor(s.status)}</td>
+                  <td class="text-muted">${formatDate(s.data_criacao)}</td>
+                </tr>`).join('') : '<tr><td colspan="3" class="empty-state">Nenhuma solicitação</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="table-card">
+          <div class="table-card-header">
+            <span class="table-card-title">Orçamentos Prontos</span>
+          </div>
+          <table class="data-table">
+            <thead><tr>
+              <th>Cliente</th><th>Valor</th><th>Nº Orc.</th>
+            </tr></thead>
+            <tbody>
+              ${d.orcamentos_prontos.length ? d.orcamentos_prontos.map(o => `
+                <tr>
+                  <td><strong>${o.cliente}</strong></td>
+                  <td class="text-green">${formatMoeda(o.valor_total)}</td>
+                  <td class="text-muted">${o.numero_pedido}</td>
+                </tr>`).join('') : '<tr><td colspan="3" class="empty-state">Nenhum orçamento</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  } catch(err) {
+    document.getElementById('conteudo').innerHTML = '<p style="color:#e74c3c">Erro ao carregar dashboard.</p>';
+  }
+}
+
+async function carregarDashboardDesenhista() {
+  try {
+    const res = await fetch('/api/dashboard/desenhista');
+    const d = await res.json();
+    const emAndamento = d.fila.filter(s => s.status === 'em andamento').length;
+    const fila = d.fila.filter(s => s.status === 'aberto');
+
+    document.getElementById('conteudo').innerHTML = `
+      <div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr)">
+        <div class="kpi-card yellow">
+          <div class="kpi-label">Fila de Espera</div>
+          <div class="kpi-value">${fila.length}</div>
+          <div class="kpi-sub">aguardando análise</div>
+          <div class="kpi-icon">◆</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Em Andamento</div>
+          <div class="kpi-value" style="color:#5dade2">${emAndamento}</div>
+          <div class="kpi-sub">aceitos por mim</div>
+          <div class="kpi-icon">⚙</div>
+        </div>
+        <div class="kpi-card green">
+          <div class="kpi-label">Finalizados Hoje</div>
+          <div class="kpi-value">${d.finalizados_hoje}</div>
+          <div class="kpi-sub">orçamentos gerados</div>
+          <div class="kpi-icon">✓</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Tempo Médio</div>
+          <div class="kpi-value">${d.tempo_medio ? d.tempo_medio + 'h' : '—'}</div>
+          <div class="kpi-sub">por orçamento</div>
+          <div class="kpi-icon">◔</div>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-card-header">
+          <span class="table-card-title">Fila de Orçamentos</span>
+          <a href="/fila" class="btn btn-primary btn-sm">Abrir Fila →</a>
+        </div>
+        <table class="data-table">
+          <thead><tr>
+            <th>Cliente</th><th>Vendedor</th><th>Hora Solic.</th>
+          </tr></thead>
+          <tbody>
+            ${fila.length ? fila.slice(0,5).map(s => `
+              <tr>
+                <td><strong>${s.cliente}</strong></td>
+                <td class="text-muted">${s.vendedor || '—'}</td>
+                <td class="text-muted">${formatDateTime(s.data_criacao)}</td>
+              </tr>`).join('') : '<tr><td colspan="3" class="empty-state">Fila vazia</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    `;
+  } catch(err) {
+    document.getElementById('conteudo').innerHTML = '<p style="color:#e74c3c">Erro ao carregar dashboard.</p>';
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Solicitações</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <h2>Nova Solicitação</h2>
+
+  <select id="cliente_id">
+    <option value="">Selecione o Cliente...</option>
+  </select>
+
+  <select id="tipo">
+    <option value="Corte">Corte</option>
+    <option value="Dobra">Dobra</option>
+    <option value="Laser">Laser</option>
+  </select>
+
+  <textarea id="descricao" placeholder="Descrição da solicitação"></textarea>
+
+  <button onclick="criarSolicitacao()">Criar Solicitação</button>
+
+  <p id="msg" style="color:green"></p>
+  <p id="erro" style="color:red"></p>
+
+  <hr>
+
+  <h2>Solicitações Abertas</h2>
+
+  <table border="1" cellpadding="8">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Cliente</th>
+        <th>Tipo</th>
+        <th>Descrição</th>
+        <th>Status</th>
+        <th>Data</th>
+      </tr>
+    </thead>
+    <tbody id="tabelaSolicitacoes"></tbody>
+  </table>
+
+  <script>
+
+    async function carregarClientes() {
+      const res = await fetch('/api/clientes');
+      const clientes = await res.json();
+      const select = document.getElementById('cliente_id');
+      clientes.forEach(c => {
+        select.innerHTML += `<option value="${c.pessoa_id}">${c.nome}</option>`;
+      });
+    }
+
+    async function carregarSolicitacoes() {
+      const res = await fetch('/api/solicitacoes');
+      const lista = await res.json();
+
+      const tbody = document.getElementById('tabelaSolicitacoes');
+      tbody.innerHTML = '';
+
+      lista.forEach(s => {
+        const data = new Date(s.data_criacao).toLocaleDateString('pt-BR');
+        tbody.innerHTML += `
+          <tr>
+            <td>${s.solicitacao_id}</td>
+            <td>${s.cliente}</td>
+            <td>${s.tipo}</td>
+            <td>${s.descricao}</td>
+            <td>${s.status}</td>
+            <td>${data}</td>
+          </tr>`;
+      });
+    }
+
+    async function criarSolicitacao() {
+      const dados = {
+        cliente_id: document.getElementById('cliente_id').value,
+        tipo: document.getElementById('tipo').value,
+        descricao: document.getElementById('descricao').value
+      };
+
+      if (!dados.cliente_id) {
+        document.getElementById('erro').innerText = 'Selecione um cliente.';
+        return;
+      }
+
+      const res = await fetch('/api/solicitacoes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dados)
+      });
+
+      const resultado = await res.json();
+
+      if (resultado.sucesso) {
+        document.getElementById('msg').innerText = resultado.mensagem;
+        document.getElementById('erro').innerText = '';
+        document.getElementById('descricao').value = '';
+        carregarSolicitacoes();
+      } else {
+        document.getElementById('erro').innerText = resultado.erro;
+        document.getElementById('msg').innerText = '';
+      }
+    }
+
+    carregarClientes();
+    carregarSolicitacoes();
+
+  </script>
+
+</body>
+</html>
